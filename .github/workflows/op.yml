@@ -48,7 +48,7 @@ jobs:
       matrix:
         repo_info:
           - {repo_url: "https://github.com/openwrt/openwrt", kernel_version: "6.1", branch: "openwrt-23.05"}
-          - {repo_url: "https://github.com/immortalwrt/immortalwrt", kernel_version: "6.1", branch: "openwrt-23.05"}
+ #         - {repo_url: "https://github.com/immortalwrt/immortalwrt", kernel_version: "6.1", branch: "openwrt-23.05"}
 
 
     steps: 
@@ -115,10 +115,7 @@ jobs:
       run: |
         cp -rf kernel/$OP_kernel/amlogic openwrt/target/linux
         
-    - name: 下载ad核心
-      run: |
-        chmod +x $DIY_P3_SH
-        $GITHUB_WORKSPACE/$DIY_P3_SH       
+        
 
     - name: 加载自定义配置
       run: |
