@@ -66,6 +66,19 @@ jobs:
     - name: 检查分支
       uses: actions/checkout@main
 
+    - name: 创建工作目录
+      run: |
+        mkdir -p /workdir
+        sudo chown $USER:$GROUPS /workdir
+
+    - name: 缓存 /workdir 目录
+      uses: actions/cache@v3
+      with:
+        path: /workdir
+        key: ${{ runner.os }}-workdir-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-workdir-
+
     - name: 编译环境
       env:
         DEBIAN_FRONTEND: noninteractive
@@ -77,8 +90,8 @@ jobs:
         sudo -E apt-get -qq autoremove --purge
         sudo -E apt-get -qq clean
         sudo timedatectl set-timezone "$TZ"
-        sudo mkdir -p /workdir
-        sudo chown $USER:$GROUPS /workdir
+        #sudo mkdir -p /workdir
+        #sudo chown $USER:$GROUPS /workdir
 
     - name: 初始化变量
       run: |
