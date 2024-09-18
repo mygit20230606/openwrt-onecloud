@@ -1,0 +1,222 @@
+name: openwrt
+
+on:
+  repository_dispatch:
+  workflow_dispatch:
+    inputs:
+      ENABLE_DHCP:
+        description: '是否开启DHCP'     
+        required: false
+        default: 'false'
+        type: boolean
+        
+      OP_IP:
+        description: '静态IP地址'     
+        required: false
+        default: '192.168.2.2' 
+        type: string
+
+      OP_rootfs:
+        description: '预设镜像大小'     
+        required: false
+        default: '600' 
+        type: string
+   
+      OP_author:
+        description: '定制作者'     
+        required: false
+        default: 'shiyu1314' 
+        type: string    
+
+      CUSTOM_PLUGINS:
+        description: '自定义插件名称，用空格分隔'
+        required: false
+        default: 'luci-app-dockerman luci-theme-argon luci-app-ttyd luci-app-diskman luci-app-hd-idle luci-app-mihomo luci-app-samba4 luci-app-emby luci-app-turboacc'
+        type: string
+
+env:
+  TZ: Asia/Shanghai
+  DIY_P1_SH: sh/op.sh
+  UPLOAD_FIRMWARE: true
+  UPLOAD_RELEASE: true
+
+jobs:
+  build_firmware:
+    name: 编译固件
+    runs-on: ubuntu-22.04
+    strategy:
+      matrix:
+        repo_info:
+          - {repo_url: "https://github.com/openwrt/openwrt", branch: "openwrt-23.05"}
+
+
+    steps: 
+    - name: 释放磁盘空间
+      uses: jlumbroso/free-disk-space@main
+      with:
+        tool-cache: false
+        android: true
+        dotnet: true
+        haskell: true
+        large-packages: true
+        docker-images: true
+        swap-storage: true
+    
+    - name: 检查分支
+      uses: actions/checkout@main
+
+    - name: 编译环境
+      env:
+        DEBIAN_FRONTEND: noninteractive
+      run: |
+        sudo rm -rf /etc/apt/sources.list.d/* /usr/share/dotnet /usr/local/lib/android /opt/ghc /opt/hostedtoolcache/CodeQL
+        sudo docker image prune --all --force
+        sudo -E apt-get -qq update
+        sudo -E apt-get -qq install ack img2simg antlr3 asciidoc autoconf automake autopoint binutils bison build-essential bzip2 ccache cmake cpio curl device-tree-compiler fastjar flex gawk gettext gcc-multilib g++-multilib git gperf haveged help2man intltool libc6-dev-i386 libelf-dev libfuse-dev libglib2.0-dev libgmp3-dev libltdl-dev libmpc-dev libmpfr-dev libncurses5-dev libncursesw5-dev libpython3-dev libreadline-dev libssl-dev libtool lrzsz mkisofs msmtp ninja-build p7zip p7zip-full patch pkgconf python2.7 python3 python3-pyelftools python3-setuptools qemu-utils rsync scons squashfs-tools subversion swig texinfo uglifyjs upx-ucl unzip vim wget xmlto xxd zlib1g-dev
+        sudo -E apt-get -qq autoremove --purge
+        sudo -E apt-get -qq clean
+        sudo timedatectl set-timezone "$TZ"
+        sudo mkdir -p /workdir
+        sudo chown $USER:$GROUPS /workdir
+
+    - name: 初始化变量
+      run: |
+        export DATE=$(TZ=UTC-8 date +"%y.%m.%d")
+        echo "DATE=$DATE" >> $GITHUB_ENV
+        echo "REPO_URL=${{ matrix.repo_info.repo_url }}" >> $GITHUB_ENV
+        echo "REPO_BRANCH=${{ matrix.repo_info.branch }}" >> $GITHUB_ENV
+        echo "OP_IP=${{ github.event.inputs.OP_IP }}" >> $GITHUB_ENV
+        echo "OP_author=${{ github.event.inputs.OP_author }}" >> $GITHUB_ENV
+        echo "OP_rootfs=${{ github.event.inputs.OP_rootfs }}" >> $GITHUB_ENV
+        echo "CUSTOM_PLUGINS=${{ github.event.inputs.CUSTOM_PLUGINS }}" >> $GITHUB_ENV
+        echo "ENABLE_DHCP=${{ github.event.inputs.ENABLE_DHCP }}" >> $GITHUB_ENV
+
+    - name: 克隆源代码
+      working-directory: /workdir
+      run: |
+        df -hT $PWD
+        git clone $REPO_URL -b $REPO_BRANCH openwrt
+        ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt          
+        
+    - name: 加载自定义脚本
+      run: |
+        chmod +x $DIY_P1_SH
+        cd openwrt
+        $GITHUB_WORKSPACE/$DIY_P1_SH
+        
+    - name: 添加玩客云
+      run: |
+        cp -rf kernel/amlogic openwrt/target/linux
+
+    - name: 加载自定义配置
+      run: |
+        [ -e files ] && mv files openwrt/files
+        cat <<EOF >>openwrt/.config
+        CONFIG_TARGET_amlogic=y
+        CONFIG_TARGET_amlogic_meson8b=y
+        CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y
+        CONFIG_TARGET_KERNEL_PARTSIZE=32
+        CONFIG_TARGET_ROOTFS_PARTSIZE=${{ github.event.inputs.OP_rootfs }}
+        CONFIG_KERNEL_EXT4_FS_SECURITY=y
+        # CONFIG_TARGET_ROOTFS_SQUASHFS is not set
+        # CONFIG_PACKAGE_dnsmasq is not set
+
+        CONFIG_PACKAGE_dnsmasq-full=y
+        CONFIG_PACKAGE_luci-app-firewall=y
+        CONFIG_PACKAGE_bash=y
+        CONFIG_PACKAGE_kmod-nft-socket=y
+        CONFIG_PACKAGE_fuse-utils=y
+        CONFIG_PACKAGE_luci-app-opkg=y
+        CONFIG_PACKAGE_luci-base=y
+        CONFIG_PACKAGE_ethtool=y
+        CONFIG_PACKAGE_automount=y
+        CONFIG_PACKAGE_autocore=y
+        CONFIG_PACKAGE_autosamba=y
+        CONFIG_PACKAGE_ip-full=y
+        CONFIG_PACKAGE_kmod-tun=y
+        CONFIG_PACKAGE_zram-swap=y
+        CONFIG_PACKAGE_my-default-settings=y
+        EOF
+        
+        
+        if [[ "${{ github.event.inputs.ENABLE_DHCP }}" == "false" ]]; then
+          rm -rf openwrt/files/etc/uci-defaults/dhcp-lan
+          sed -i "s/192.168.1.1/${{ github.event.inputs.OP_IP }}/" openwrt/package/base-files/files/bin/config_generate
+          ls openwrt/files/etc/uci-defaults
+        fi   
+
+        IFS=' ' read -r -a plugins <<< "${{ github.event.inputs.CUSTOM_PLUGINS }}"
+        for plugin in "${plugins[@]}"; do
+          echo "CONFIG_PACKAGE_${plugin}=y" >> openwrt/.config
+        done
+     
+    
+    - name: 下载编译依赖
+      id: package
+      run: |
+        cd openwrt
+        make defconfig
+        make download -j8
+        find dl -size -1024c -exec ls -l {} \;
+        find dl -size -1024c -exec rm -f {} \;
+    
+    - name: 编译源码
+      id: compile
+      run: |
+        cd openwrt
+        echo -e "$(nproc) thread compile"
+        make -j$(nproc) || make -j1 || make -j1 V=s
+        echo "status=success" >> $GITHUB_OUTPUT
+        grep '^CONFIG_TARGET.*DEVICE.*=y' .config | sed -r 's/.*DEVICE_(.*)=y/\1/' > DEVICE_NAME
+        [ -s DEVICE_NAME ] && echo "DEVICE_NAME=_$(cat DEVICE_NAME)" >> $GITHUB_ENV
+        echo "FILE_DATE=_$(date +"%Y%m%d%H%M")" >> $GITHUB_ENV
+
+    - name: 查看磁盘使用情况
+      if: (!cancelled())
+      run: df -hT
+
+    - name: 整理文件
+      id: organize
+      if: env.UPLOAD_FIRMWARE == 'true' && !cancelled()
+      run: |
+        gunzip openwrt/bin/targets/*/*/*.gz
+        for f in openwrt/bin/targets/*/*/*.img; do
+          xz -9 --threads=0 --compress "$f"
+        done
+        rm -rf openwrt/bin/targets/*/*/*.img
+        rm -rf openwrt/bin/targets/*/*/*.gz
+        cd openwrt/bin/targets/*/*
+        rm -rf packages
+        rm -rf *.buildinfo
+        rm -rf profiles.json
+        rm -rf *.manifest
+        rm -rf *.sha
+        rm -rf sha256sums
+        echo "FIRMWARE=$PWD" >> $GITHUB_ENV
+
+    - name: 上传固件到Releases
+      uses: softprops/action-gh-release@master
+      if: env.UPLOAD_RELEASE == 'true' && !cancelled()
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      with:
+        tag_name: OpenWrt直刷包_${{env.DATE}}
+        files: ${{ env.FIRMWARE }}/*
+        body: |
+          ====================固件信息=======================
+           源码：${{ matrix.repo_info.repo_url }}
+           分支：${{ matrix.repo_info.branch }}
+           静态IP：${{ github.event.inputs.OP_IP }}
+           DHCP状态：${{ github.event.inputs.ENABLE_DHCP }}
+           插件：${{ github.event.inputs.CUSTOM_PLUGINS }}
+           定制作者：${{ github.event.inputs.OP_author }}
+           扩容：sh 1.sh
+           默认密码：无
+
+    - name: 清理Releases
+      uses: dev-drprasad/delete-older-releases@v0.3.4
+      with:
+        keep_latest: 2
+        delete_tags: true
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
