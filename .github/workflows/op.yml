@@ -124,13 +124,6 @@ jobs:
         CONFIG_PACKAGE_zram-swap=y
         CONFIG_PACKAGE_my-default-settings=y
         EOF
-        
-        
-        if [[ "${{ github.event.inputs.ENABLE_DHCP }}" == "false" ]]; then
-          rm -rf openwrt/files/etc/uci-defaults/dhcp-lan
-          sed -i "s/192.168.1.1/${{ github.event.inputs.OP_IP }}/" openwrt/package/base-files/files/bin/config_generate
-          ls openwrt/files/etc/uci-defaults
-        fi   
 
         IFS=' ' read -r -a plugins <<< "${{ github.event.inputs.CUSTOM_PLUGINS }}"
         for plugin in "${plugins[@]}"; do
