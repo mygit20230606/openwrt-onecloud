@@ -13,7 +13,7 @@ on:
       OP_IP:
         description: '静态IP地址'     
         required: false
-        default: '192.168.2.2' 
+        default: '192.168.1.1' 
         type: string
 
       OP_rootfs:
@@ -110,17 +110,25 @@ jobs:
 
     - name: 加载自定义配置
       run: |
-        [ -e files ] && mv files openwrt/files
         cat <<EOF >>openwrt/.config
-        CONFIG_TARGET_amlogic=y
-        CONFIG_TARGET_amlogic_meson8b=y
-        CONFIG_TARGET_amlogic_meson8b_DEVICE_thunder-onecloud=y
-        CONFIG_TARGET_KERNEL_PARTSIZE=32
-        CONFIG_TARGET_ROOTFS_PARTSIZE=${{ github.event.inputs.OP_rootfs }}
-        CONFIG_KERNEL_EXT4_FS_SECURITY=y
-        # CONFIG_TARGET_ROOTFS_SQUASHFS is not set
-        # CONFIG_PACKAGE_dnsmasq is not set
+        # Target Config
+        CONFIG_TARGET_x86=y
+        CONFIG_TARGET_x86_64=y
+        CONFIG_TARGET_x86_64_DEVICE_generic=y
 
+        # Set Firmware Size
+        CONFIG_TARGET_KERNEL_PARTSIZE=64
+        CONFIG_TARGET_ROOTFS_PARTSIZE=960
+
+        # Firmware Type
+        # CONFIG_GRUB_CONSOLE is not set
+        CONFIG_GRUB_IMAGES=y
+        CONFIG_GRUB_EFI_IMAGES=y
+        CONFIG_TARGET_IMAGES_GZIP=y
+        # CONFIG_TARGET_ROOTFS_EXT4FS is not set
+        CONFIG_TARGET_ROOTFS_SQUASHFS=y
+        CONFIG_TARGET_ROOTFS_TARGZ=y
+        # CONFIG_VMDK_IMAGES is not set
         CONFIG_PACKAGE_dnsmasq-full=y
         CONFIG_PACKAGE_luci-app-firewall=y
         CONFIG_PACKAGE_bash=y
