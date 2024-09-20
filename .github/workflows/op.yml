@@ -16,22 +16,10 @@ on:
         default: '192.168.1.1' 
         type: string
 
-      OP_rootfs:
-        description: '预设镜像大小'     
-        required: false
-        default: '600' 
-        type: string
-   
-      OP_author:
-        description: '定制作者'     
-        required: false
-        default: 'shiyu1314' 
-        type: string    
-
       CUSTOM_PLUGINS:
         description: '自定义插件名称，用空格分隔'
         required: false
-        default: 'luci-app-dockerman luci-theme-argon luci-app-ttyd luci-app-diskman luci-app-hd-idle luci-app-mihomo luci-app-samba4 luci-app-emby luci-app-turboacc'
+        default: 'luci-app-dockerman luci-theme-argon  luci-app-diskman  luci-app-samba4'
         type: string
 
 env:
@@ -98,15 +86,6 @@ jobs:
         git clone $REPO_URL -b $REPO_BRANCH openwrt
         ln -sf /workdir/openwrt $GITHUB_WORKSPACE/openwrt          
         
-    - name: 加载自定义脚本
-      run: |
-        chmod +x $DIY_P1_SH
-        cd openwrt
-        $GITHUB_WORKSPACE/$DIY_P1_SH
-        
-    - name: 添加玩客云
-      run: |
-        cp -rf kernel/amlogic openwrt/target/linux
 
     - name: 加载自定义配置
       run: |
